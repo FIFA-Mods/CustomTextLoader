@@ -111,7 +111,7 @@ void TextFileTable::Clear() {
     mCells.clear();
 }
 
-bool TextFileTable::Read(std::filesystem::path const &filename, char separator) {
+bool TextFileTable::Read(std::wstring const &filename, char separator) {
     Clear();
     FILE *file = _wfopen(filename.c_str(), L"rb");
     if (file) {
@@ -238,31 +238,31 @@ bool TextFileTable::Read(std::filesystem::path const &filename, char separator) 
     return true;
 }
 
-bool TextFileTable::ReadCSV(std::filesystem::path const &filename, char separator) {
+bool TextFileTable::ReadCSV(std::wstring const &filename, char separator) {
     return Read(filename, separator);
 }
 
-bool TextFileTable::ReadTSV(std::filesystem::path const &filename) {
+bool TextFileTable::ReadTSV(std::wstring const &filename) {
     return Read(filename, L'\t');
 }
 
-bool TextFileTable::ReadUnicodeText(std::filesystem::path const &filename) {
+bool TextFileTable::ReadUnicodeText(std::wstring const &filename) {
     return Read(filename, L'\t');
 }
 
-bool TextFileTable::Write(std::filesystem::path const &filename, char separator, eEncoding encoding) {
+bool TextFileTable::Write(std::wstring const &filename, char separator, eEncoding encoding) {
     // not implemented
     return false;
 }
 
-bool TextFileTable::WriteCSV(std::filesystem::path const &filename, char separator) {
+bool TextFileTable::WriteCSV(std::wstring const &filename, char separator) {
     return Write(filename, separator, ENCODING_UTF8_BOM);
 }
 
-bool TextFileTable::WriteTSV(std::filesystem::path const &filename) {
+bool TextFileTable::WriteTSV(std::wstring const &filename) {
     return Write(filename, L'\t', ENCODING_UTF8_BOM);
 }
 
-bool TextFileTable::WriteUnicodeText(std::filesystem::path const &filename) {
+bool TextFileTable::WriteUnicodeText(std::wstring const &filename) {
     return Write(filename, L'\t', ENCODING_UTF16LE_BOM);
 }

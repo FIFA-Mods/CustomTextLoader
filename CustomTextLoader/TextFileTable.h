@@ -46,12 +46,12 @@ public:
         mCells.push_back(vec);
     }
     void Clear();
-    bool Read(std::filesystem::path const &filename, char separator = L',');
-    bool ReadCSV(std::filesystem::path const &filename, char separator = L',');
-    bool ReadTSV(std::filesystem::path const &filename);
-    bool ReadUnicodeText(std::filesystem::path const &filename);
-    bool Write(std::filesystem::path const &filename, char separator = L',', eEncoding encoding = ENCODING_UTF8_BOM);
-    bool WriteCSV(std::filesystem::path const &filename, char separator = L',');
-    bool WriteTSV(std::filesystem::path const &filename);
-    bool WriteUnicodeText(std::filesystem::path const &filename);
+    bool Read(std::wstring const &filename, char separator = L',');
+    bool ReadCSV(std::wstring const &filename, char separator = L',');
+    bool ReadTSV(std::wstring const &filename);
+    bool ReadUnicodeText(std::wstring const &filename);
+    bool Write(std::wstring const &filename, char separator = L',', eEncoding encoding = ENCODING_UTF8_BOM);
+    bool WriteCSV(std::wstring const &filename, char separator = L',');
+    bool WriteTSV(std::wstring const &filename);
+    bool WriteUnicodeText(std::wstring const &filename);
 };

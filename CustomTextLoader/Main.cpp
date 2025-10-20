@@ -2,6 +2,10 @@
 #include <map>
 #include "TextFileTable.h"
 #include <filesystem>
+#include <windows.h>
+#include <functional>
+#include <cwctype>
+
 using namespace std::filesystem;
 
 using namespace plugin;
@@ -18,7 +22,7 @@ public:
         return table;
     }
 
-    static void * METHOD OnTextLookup(void *t, DUMMY_ARG, void *str, unsigned int id) {
+    static void *METHOD OnTextLookup(void *t, DUMMY_ARG, void *str, unsigned int id) {
         auto it = GetTranslationTable().find(id);
         if (it != GetTranslationTable().end()) {
             CallMethodDynGlobal(StringCtorAddr, str, (*it).second.c_str());
@@ -27,72 +31,100 @@ public:
         return CallMethodAndReturnDynGlobal<void *>(OrigTextLookup, t, str, id);
     }
 
+    static void IterateFiles(const std::wstring &root, const std::wstring &ext,
+        const std::function<void(const std::filesystem::path &)> &callback) {
+        std::wstring base = root;
+        if (!base.empty() && base.back() != L'\\' && base.back() != L'/')
+            base.push_back(L'\\');
+        std::wstring pattern = base + L"*";
+        WIN32_FIND_DATAW fd;
+        HANDLE h = FindFirstFileW(pattern.c_str(), &fd);
+        if (h == INVALID_HANDLE_VALUE)
+            return;
+        std::wstring wantExt = ToLower(ext);
+        do {
+            std::wstring name = fd.cFileName;
+            if (name == L"." || name == L"..")
+                continue;
+
+            std::wstring full = base + name;
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                IterateFiles(full, ext, callback);
+            else {
+                std::wstring fileExt;
+                size_t pos = name.rfind(L'.');
+                if (pos != std::wstring::npos)
+                    fileExt = name.substr(pos);
+                if (ToLower(fileExt) == wantExt)
+                    callback(std::filesystem::path(full));
+            }
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+
     static void METHOD OnSetLanguage(void *t, DUMMY_ARG, char const *language) {
         GetTranslationTable().clear();
         CallMethodDynGlobal(OrigSetLanguage, t, language);
         std::string gameLanguage = ToLower(language);
         if (gameLanguage.empty())
             gameLanguage = "eng";
-        for (const auto& p : recursive_directory_iterator("plugins\\")) {
-            if (p.path().extension() == L".tr") {
-                TextFileTable file;
-                if (file.Read(p.path(), 0)) {
-                    std::string line;
-                    bool canAddLines = true;
-                    for (size_t r = 0; r < file.NumRows(); r++) {
-                        auto const &row = file.Row(r);
-                        line = row.size() > 0 ? row[0] : "";
-                        if (!line.empty() && line[0] != ';' && line[0] != '#') {
-                            if (line[0] == '[') {
-                                auto bcPos = line.find(']', 1);
-                                if (bcPos != std::string::npos) {
-                                    std::string currTranslationLanguage = line.substr(1, bcPos - 1);
-                                    Trim(currTranslationLanguage);
-                                    if (currTranslationLanguage.empty())
-                                        canAddLines = true;
-                                    else {
-                                        canAddLines = false;
-                                        currTranslationLanguage = ToLower(currTranslationLanguage);
-                                        auto languages = Split(currTranslationLanguage, ',', true, true, false);
-                                        for (auto const &l : languages) {
-                                            if (l == gameLanguage) {
-                                                canAddLines = true;
-                                                break;
-                                            }
+        IterateFiles(FIFA::GameDirPath(L"plugins"), L".tr", [&](std::wstring const &filePath) {
+            TextFileTable file;
+            if (file.Read(filePath, 0)) {
+                std::string line;
+                bool canAddLines = true;
+                for (size_t r = 0; r < file.NumRows(); r++) {
+                    auto const &row = file.Row(r);
+                    line = row.size() > 0 ? row[0] : "";
+                    if (!line.empty() && line[0] != ';' && line[0] != '#') {
+                        if (line[0] == '[') {
+                            auto bcPos = line.find(']', 1);
+                            if (bcPos != std::string::npos) {
+                                std::string currTranslationLanguage = line.substr(1, bcPos - 1);
+                                Trim(currTranslationLanguage);
+                                if (currTranslationLanguage.empty())
+                                    canAddLines = true;
+                                else {
+                                    canAddLines = false;
+                                    currTranslationLanguage = ToLower(currTranslationLanguage);
+                                    auto languages = Split(currTranslationLanguage, ',', true, true, false);
+                                    for (auto const &l : languages) {
+                                        if (l == gameLanguage) {
+                                            canAddLines = true;
+                                            break;
                                         }
                                     }
                                 }
                             }
-                            else {
-                                if (canAddLines) {
-                                    auto beginPos = line.find_first_not_of(" \t");
-                                    if (beginPos != std::string::npos) {
-                                        auto splitPos = line.find_first_of(" \t", beginPos + 1);
-                                        unsigned int id = 0;
-                                        bool hasId = true;
-                                        std::string value;
-                                        if (splitPos == std::string::npos) {
-                                            try {
-                                                id = static_cast<unsigned int>(std::stoull(line, 0, 10));
-                                            }
-                                            catch (...) {
-                                                hasId = false;
-                                            }
+                        }
+                        else {
+                            if (canAddLines) {
+                                auto beginPos = line.find_first_not_of(" \t");
+                                if (beginPos != std::string::npos) {
+                                    auto splitPos = line.find_first_of(" \t", beginPos + 1);
+                                    unsigned int id = 0;
+                                    bool hasId = true;
+                                    std::string value;
+                                    if (splitPos == std::string::npos) {
+                                        try {
+                                            id = static_cast<unsigned int>(std::stoull(line, 0, 10));
                                         }
-                                        else {
-                                            std::string idStr = line.substr(beginPos, splitPos - beginPos);
-                                            try {
-                                                id = static_cast<unsigned int>(std::stoull(line, 0, 10));
-                                                value = line.substr(splitPos + 1);
-                                            }
-                                            catch (...) {
-                                                hasId = false;
-                                            }
+                                        catch (...) {
+                                            hasId = false;
                                         }
-                                        if (hasId) {
-                                            GetTranslationTable()[id] = value;
-                                            ::Message("%d: %s", id, value.c_str());
+                                    }
+                                    else {
+                                        std::string idStr = line.substr(beginPos, splitPos - beginPos);
+                                        try {
+                                            id = static_cast<unsigned int>(std::stoull(line, 0, 10));
+                                            value = line.substr(splitPos + 1);
                                         }
+                                        catch (...) {
+                                            hasId = false;
+                                        }
+                                    }
+                                    if (hasId) {
+                                        GetTranslationTable()[id] = value;
                                     }
                                 }
                             }
@@ -100,7 +132,7 @@ public:
                     }
                 }
             }
-        }
+        });
     }
 
     static void METHOD OnTextFromCache(void *t, DUMMY_ARG, void *str, unsigned int id, bool *result) {
